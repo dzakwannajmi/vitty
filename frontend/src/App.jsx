@@ -14,11 +14,11 @@ function App() {
 
   const { donate, getAccountInfo } = useContract();
 
-  // 🔥 Helper: timeout biar ga nge-freeze
+  // ⏱️ Timeout helper
   const withTimeout = (promise, ms = 10000) => {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error("Freighter tidak merespon (timeout)"));
+        reject(new Error("Freighter tidak merespon (popup ke-block)"));
       }, ms);
 
       promise
@@ -33,42 +33,32 @@ function App() {
     });
   };
 
-  // 🔌 CONNECT WALLET
+  // 🔌 Connect wallet
   const handleConnect = async () => {
     setErrorMsg("");
 
     try {
       setLoading(true);
 
-      // ❗ cek extension
       if (!window.freighterApi) {
         throw new Error("Freighter belum terinstall");
       }
 
-      console.log("➡️ Requesting access...");
-
       const data = await withTimeout(getAccountInfo());
-
-      console.log("✅ Response:", data);
 
       if (!data) throw new Error("Gagal ambil data wallet");
 
       setUserInfo(data);
       setIsConnected(true);
     } catch (e) {
-      console.error("❌ CONNECT ERROR:", e);
-
-      if (e.message.includes("timeout")) {
-        setErrorMsg("Popup Freighter kemungkinan terblokir browser");
-      } else {
-        setErrorMsg(e.message);
-      }
+      console.error(e);
+      setErrorMsg(e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // 💸 DONATE
+  // 💸 Donate
   const handleDonate = async (e) => {
     e.preventDefault();
     setErrorMsg("");
@@ -85,11 +75,10 @@ function App() {
 
       setAmount("");
 
-      // refresh saldo
       const data = await getAccountInfo();
       if (data) setUserInfo(data);
     } catch (e) {
-      console.error("❌ DONATE ERROR:", e);
+      console.error(e);
       setErrorMsg(e.message);
     } finally {
       setLoading(false);
@@ -106,17 +95,13 @@ function App() {
         <div style={styles.card}>
           <h1>🚀 Stellar Donate</h1>
           <p style={{ color: "#94a3b8" }}>
-            Connect your wallet to start
+            Workshop DApp menggunakan wallet Freighter
           </p>
 
           {errorMsg && <p style={styles.error}>{errorMsg}</p>}
 
-          <button
-            onClick={handleConnect}
-            disabled={loading}
-            style={styles.button}
-          >
-            {loading ? "Connecting..." : "Connect Freighter"}
+          <button onClick={handleConnect} disabled={loading} style={styles.button}>
+            {loading ? "Connecting..." : "Connect Wallet"}
           </button>
         </div>
       </div>
@@ -139,10 +124,10 @@ function App() {
 
         {errorMsg && <p style={styles.error}>{errorMsg}</p>}
 
-        <form onSubmit={handleDonate} style={{ marginTop: "15px" }}>
+        <form onSubmit={handleDonate}>
           <input
             type="number"
-            placeholder="Amount XLM"
+            placeholder="Jumlah XLM"
             value={amount}
             min="0"
             step="0.1"
@@ -150,19 +135,12 @@ function App() {
             style={styles.input}
           />
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={styles.button}
-          >
-            {loading ? "Processing..." : "Send Donation"}
+          <button type="submit" disabled={loading} style={styles.button}>
+            {loading ? "Processing..." : "Kirim Donasi"}
           </button>
         </form>
 
-        <button
-          onClick={() => setIsConnected(false)}
-          style={styles.disconnect}
-        >
+        <button onClick={() => setIsConnected(false)} style={styles.disconnect}>
           Disconnect
         </button>
       </div>
@@ -170,7 +148,7 @@ function App() {
   );
 }
 
-// ================= STYLE =================
+// 🎨 STYLE
 const styles = {
   container: {
     display: "flex",
@@ -180,7 +158,6 @@ const styles = {
     background: "#020617",
     color: "white",
   },
-
   card: {
     background: "#0f172a",
     padding: "30px",
@@ -188,27 +165,24 @@ const styles = {
     width: "360px",
     textAlign: "center",
   },
-
   box: {
     background: "#020617",
     padding: "15px",
     borderRadius: "10px",
     marginTop: "15px",
   },
-
   label: {
     fontSize: "12px",
     color: "#94a3b8",
   },
-
   input: {
     width: "100%",
     padding: "10px",
     borderRadius: "8px",
+    marginTop: "10px",
     marginBottom: "10px",
     border: "none",
   },
-
   button: {
     width: "100%",
     padding: "10px",
@@ -218,7 +192,6 @@ const styles = {
     color: "white",
     cursor: "pointer",
   },
-
   disconnect: {
     marginTop: "10px",
     background: "none",
@@ -226,7 +199,6 @@ const styles = {
     color: "#94a3b8",
     cursor: "pointer",
   },
-
   error: {
     color: "#ef4444",
     fontSize: "12px",
