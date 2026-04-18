@@ -1,177 +1,238 @@
-import { useState, useEffect } from "react";
-import { nativeToScVal } from "@stellar/stellar-sdk";
+import React, { useState } from "react";
 import { useContract } from "./hooks/useContract";
 
-// - Styles --------------------------
-const s = {
-  app: { maxWidth: 600, margin: "0 auto", padding: "2rem 1.5rem", fontFamily: "system-ui, sans-serif" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem", paddingBottom: "1rem", borderBottom: "1px solid #e5e7eb" },
-  title: { fontSize: "1.25rem", fontWeight: 700, margin: 0 },
-  btnPrimary: { background: "#6366f1", color: "#fff", border: "none", padding: "0.5rem 1.1rem", borderRadius: 8, cursor: "pointer", fontWeight: 500 },
-  btnOutline: { background: "transparent", color: "#374151", border: "1px solid #d1d5db", padding: "0.5rem 1.1rem", borderRadius: 8, cursor: "pointer" },
-  btnDanger: { background: "#ef4444", color: "#fff", border: "none", padding: "0.35rem 0.8rem", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" },
-  walletInfo: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 },
-  address: { fontSize: "0.8rem", color: "#6b7280", fontFamily: "monospace", background: "#f3f4f6", padding: "0.4rem 0.75rem", borderRadius: 6 },
-  balance: { fontSize: "0.75rem", color: "#6366f1", fontWeight: 600 },
-  walletRow: { display: "flex", alignItems: "center", gap: 10 },
-  card: { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: "1.25rem", marginBottom: "0.75rem" },
-  form: { background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "1.25rem", marginBottom: "1.5rem" },
-  input: { width: "100%", border: "1px solid #d1d5db", borderRadius: 7, padding: "0.55rem 0.75rem", fontSize: "0.95rem", boxSizing: "border-box", marginBottom: "0.75rem", outline: "none" },
-  label: { display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#374151", marginBottom: "0.3rem" },
-  error: { color: "#ef4444", fontSize: "0.85rem", margin: "0.5rem 0" },
-  success: { color: "#16a34a", fontSize: "0.85rem", margin: "0.5rem 0" },
-  noteTitle: { margin: "0 0 0.3rem", fontSize: "1rem", fontWeight: 600 },
-  noteBody: { margin: "0 0 0.75rem", color: "#6b7280", fontSize: "0.9rem" },
-  noteFooter: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  noteId: { fontSize: "0.7rem", color: "#9ca3af", fontFamily: "monospace" },
-  sectionTitle: { fontWeight: 600, marginBottom: "1rem", color: "#111827" },
-  empty: { textAlign: "center", color: "#9ca3af", padding: "2rem 0", fontSize: "0.9rem" },
-};
+function App() {
+  const [amount, setAmount] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [userInfo, setUserInfo] = useState({
+    address: "",
+    balance: "0",
+  });
 
-export default function App() {
-  // - Hook - semua fungsi wallet & contract ada di sini ---
-  const {
-    publicKey,
-    isWalletConnected,
-    walletLoading,
-    walletError,
-    connectWallet,
-    disconnectWallet,
-    readContract,
-    writeContract,
-    txLoading,
-    txError,
-    txSuccess,
-    xlmBalance,
-  } = useContract();
+  const { donate, getAccountInfo } = useContract();
 
-  // - State lokal ----------------------
-  const [notes, setNotes] = useState([]);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  const handleConnect = async () => {
+    try {
+      setLoading(true);
+      const data = await getAccountInfo();
 
-  // Load notes saat pertama kali halaman dibuka
-  useEffect(() => {
-    loadNotes();
-  }, []);
+      if (data) {
+        setUserInfo(data);
+        setIsConnected(true);
+      } else {
+        alert("Gagal konek wallet");
+      }
+    } catch (e) {
+      alert("Freighter tidak merespon");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // - Fungsi-fungsi ---------------------
+  const handleDonate = async (e) => {
+    e.preventDefault();
 
-  async function loadNotes() {
-    const data = await readContract("get_notes");
-    setNotes(data || []);
-  }
+    if (!amount || amount <= 0) {
+      alert("Masukkan jumlah yang valid");
+      return;
+    }
 
-  async function handleCreate() {
-    await writeContract("create_note", [
-      nativeToScVal(title, { type: "string" }),
-      nativeToScVal(content, { type: "string" }),
-    ]);
-    setTitle("");
-    setContent("");
-    await loadNotes();
-  }
+    try {
+      setLoading(true);
 
-  async function handleDelete(id) {
-    await writeContract("delete_note", [
-      nativeToScVal(id, { type: "u64" }),
-    ]);
-    await loadNotes();
-  }
+      await donate(parseFloat(amount) * 10000000);
 
-  // - UI ---------------------------
-  return (
-    <div style={s.app}>
+      setAmount("");
 
-      {/* Header */}
-      <div style={s.header}>
-        <h1 style={s.title}>Notes DApp</h1>
+      // refresh saldo
+      const data = await getAccountInfo();
+      if (data) setUserInfo(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        {isWalletConnected ? (
-          <div style={s.walletInfo}>
-            <div style={s.walletRow}>
-              <span style={s.address}>
-                {publicKey.slice(0, 6)}...{publicKey.slice(-6)}
-              </span>
-              <button style={s.btnOutline} onClick={disconnectWallet}>
-                Disconnect
-              </button>
-            </div>
-            {xlmBalance !== null && (
-              <span style={s.balance}>
-                {parseFloat(xlmBalance).toFixed(2)} XLM
-              </span>
-            )}
-          </div>
-        ) : (
-          <button style={s.btnPrimary} onClick={connectWallet} disabled={walletLoading}>
-            {walletLoading ? "Connecting..." : "Connect Wallet"}
+  const shortAddress = (addr) =>
+    addr ? `${addr.slice(0, 6)}...${addr.slice(-6)}` : "";
+
+  // ================= LOGIN =================
+  if (!isConnected) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.cardGlass}>
+          <h1 style={styles.title}>🚀 Stellar Donate</h1>
+          <p style={styles.subtitle}>
+            Simple DApp using Freighter Wallet
+          </p>
+
+          <button
+            onClick={handleConnect}
+            style={styles.primaryButton}
+            disabled={loading}
+          >
+            {loading ? "Connecting..." : "Connect Wallet"}
           </button>
-        )}
+        </div>
       </div>
+    );
+  }
 
-      {/* Error & status transaksi */}
-      {walletError && <p style={s.error}>⚠ {walletError}</p>}
-      {txError && <p style={s.error}>⚠ {txError}</p>}
-      {txSuccess && <p style={s.success}>✓ Transaction confirmed!</p>}
+  // ================= DASHBOARD =================
+  return (
+    <div style={styles.container}>
+      <div style={styles.cardGlass}>
+        <div style={styles.header}>
+          <span style={styles.badge}>Connected</span>
+        </div>
 
-      {/* Form buat note - hanya muncul kalau wallet sudah connect */}
-      {isWalletConnected && (
-        <div style={s.form}>
-          <p style={s.sectionTitle}>New Note</p>
+        <h2 style={{ marginBottom: "10px" }}>Dashboard</h2>
 
-          <label style={s.label}>Title</label>
+        <div style={styles.walletBox}>
+          <p style={styles.label}>Address</p>
+          <code style={styles.address}>
+            {shortAddress(userInfo.address)}
+          </code>
+
+          <p style={styles.label}>Balance</p>
+          <h2 style={styles.balance}>
+            {userInfo.balance} <span style={{ fontSize: 14 }}>XLM</span>
+          </h2>
+        </div>
+
+        <form onSubmit={handleDonate} style={styles.form}>
           <input
-            style={s.input}
-            placeholder="Enter title..."
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-
-          <label style={s.label}>Content</label>
-          <input
-            style={s.input}
-            placeholder="Enter content..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
+            type="number"
+            placeholder="Amount (XLM)"
+            value={amount}
+            min="0"
+            step="0.1"
+            onChange={(e) => setAmount(e.target.value)}
+            style={styles.input}
           />
 
           <button
-            style={s.btnPrimary}
-            onClick={handleCreate}
-            disabled={txLoading || !title || !content}
+            type="submit"
+            style={styles.primaryButton}
+            disabled={loading}
           >
-            {txLoading ? "Saving..." : "Save Note"}
+            {loading ? "Processing..." : "Send Donation"}
           </button>
-        </div>
-      )}
+        </form>
 
-      {/* Daftar notes */}
-      <p style={s.sectionTitle}>All Notes ({notes.length})</p>
-
-      {notes.length === 0 ? (
-        <p style={s.empty}>No notes yet.</p>
-      ) : (
-        notes.map((note) => (
-          <div key={note.id} style={s.card}>
-            <h3 style={s.noteTitle}>{note.title}</h3>
-            <p style={s.noteBody}>{note.content}</p>
-            <div style={s.noteFooter}>
-              <span style={s.noteId}>id: {note.id?.toString()}</span>
-              {isWalletConnected && (
-                <button
-                  style={s.btnDanger}
-                  onClick={() => handleDelete(note.id)}
-                  disabled={txLoading}
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-          </div>
-        ))
-      )}
-
+        <button
+          onClick={() => setIsConnected(false)}
+          style={styles.disconnect}
+        >
+          Disconnect
+        </button>
+      </div>
     </div>
   );
 }
+
+// ================= STYLE =================
+const styles = {
+  container: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    height: "100vh",
+    background:
+      "linear-gradient(135deg, #0f172a, #1e293b, #020617)",
+    fontFamily: "sans-serif",
+  },
+
+  cardGlass: {
+    width: "380px",
+    padding: "30px",
+    borderRadius: "20px",
+    backdropFilter: "blur(20px)",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+    color: "white",
+  },
+
+  title: {
+    marginBottom: "10px",
+  },
+
+  subtitle: {
+    color: "#94a3b8",
+    marginBottom: "25px",
+  },
+
+  header: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+
+  badge: {
+    background: "#22c55e",
+    padding: "5px 10px",
+    borderRadius: "20px",
+    fontSize: "11px",
+  },
+
+  walletBox: {
+    background: "rgba(255,255,255,0.05)",
+    padding: "15px",
+    borderRadius: "12px",
+    marginBottom: "20px",
+  },
+
+  label: {
+    fontSize: "11px",
+    color: "#94a3b8",
+    margin: 0,
+  },
+
+  address: {
+    fontSize: "13px",
+    display: "block",
+    marginBottom: "10px",
+  },
+
+  balance: {
+    margin: 0,
+  },
+
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+
+  input: {
+    padding: "12px",
+    borderRadius: "10px",
+    border: "none",
+    outline: "none",
+    background: "#020617",
+    color: "white",
+  },
+
+  primaryButton: {
+    padding: "12px",
+    borderRadius: "10px",
+    border: "none",
+    background: "linear-gradient(135deg,#3b82f6,#6366f1)",
+    color: "white",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+
+  disconnect: {
+    marginTop: "15px",
+    background: "none",
+    border: "none",
+    color: "#94a3b8",
+    cursor: "pointer",
+    fontSize: "12px",
+  },
+};
+
+export default App;
