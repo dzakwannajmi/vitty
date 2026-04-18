@@ -5,6 +5,8 @@ function App() {
   const [amount, setAmount] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
   const [userInfo, setUserInfo] = useState({
     address: "",
     balance: "0",
@@ -12,36 +14,74 @@ function App() {
 
   const { donate, getAccountInfo } = useContract();
 
+  // 🔥 Helper: timeout biar ga nge-freeze
+  const withTimeout = (promise, ms = 10000) => {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error("Freighter tidak merespon (timeout)"));
+      }, ms);
+
+      promise
+        .then((res) => {
+          clearTimeout(timer);
+          resolve(res);
+        })
+        .catch((err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+  };
+
+  // 🔌 CONNECT WALLET
   const handleConnect = async () => {
+    setErrorMsg("");
+
     try {
       setLoading(true);
-      const data = await getAccountInfo();
 
-      if (data) {
-        setUserInfo(data);
-        setIsConnected(true);
-      } else {
-        alert("Gagal konek wallet");
+      // ❗ cek extension
+      if (!window.freighterApi) {
+        throw new Error("Freighter belum terinstall");
       }
+
+      console.log("➡️ Requesting access...");
+
+      const data = await withTimeout(getAccountInfo());
+
+      console.log("✅ Response:", data);
+
+      if (!data) throw new Error("Gagal ambil data wallet");
+
+      setUserInfo(data);
+      setIsConnected(true);
     } catch (e) {
-      alert("Freighter tidak merespon");
+      console.error("❌ CONNECT ERROR:", e);
+
+      if (e.message.includes("timeout")) {
+        setErrorMsg("Popup Freighter kemungkinan terblokir browser");
+      } else {
+        setErrorMsg(e.message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // 💸 DONATE
   const handleDonate = async (e) => {
     e.preventDefault();
+    setErrorMsg("");
 
     if (!amount || amount <= 0) {
-      alert("Masukkan jumlah yang valid");
+      setErrorMsg("Masukkan jumlah yang valid");
       return;
     }
 
     try {
       setLoading(true);
 
-      await donate(parseFloat(amount) * 10000000);
+      await withTimeout(donate(parseFloat(amount) * 10000000));
 
       setAmount("");
 
@@ -49,7 +89,8 @@ function App() {
       const data = await getAccountInfo();
       if (data) setUserInfo(data);
     } catch (e) {
-      console.error(e);
+      console.error("❌ DONATE ERROR:", e);
+      setErrorMsg(e.message);
     } finally {
       setLoading(false);
     }
@@ -62,18 +103,20 @@ function App() {
   if (!isConnected) {
     return (
       <div style={styles.container}>
-        <div style={styles.cardGlass}>
-          <h1 style={styles.title}>🚀 Stellar Donate</h1>
-          <p style={styles.subtitle}>
-            Simple DApp using Freighter Wallet
+        <div style={styles.card}>
+          <h1>🚀 Stellar Donate</h1>
+          <p style={{ color: "#94a3b8" }}>
+            Connect your wallet to start
           </p>
+
+          {errorMsg && <p style={styles.error}>{errorMsg}</p>}
 
           <button
             onClick={handleConnect}
-            style={styles.primaryButton}
             disabled={loading}
+            style={styles.button}
           >
-            {loading ? "Connecting..." : "Connect Wallet"}
+            {loading ? "Connecting..." : "Connect Freighter"}
           </button>
         </div>
       </div>
@@ -83,29 +126,23 @@ function App() {
   // ================= DASHBOARD =================
   return (
     <div style={styles.container}>
-      <div style={styles.cardGlass}>
-        <div style={styles.header}>
-          <span style={styles.badge}>Connected</span>
-        </div>
+      <div style={styles.card}>
+        <h2>Dashboard</h2>
 
-        <h2 style={{ marginBottom: "10px" }}>Dashboard</h2>
-
-        <div style={styles.walletBox}>
+        <div style={styles.box}>
           <p style={styles.label}>Address</p>
-          <code style={styles.address}>
-            {shortAddress(userInfo.address)}
-          </code>
+          <code>{shortAddress(userInfo.address)}</code>
 
           <p style={styles.label}>Balance</p>
-          <h2 style={styles.balance}>
-            {userInfo.balance} <span style={{ fontSize: 14 }}>XLM</span>
-          </h2>
+          <h2>{userInfo.balance} XLM</h2>
         </div>
 
-        <form onSubmit={handleDonate} style={styles.form}>
+        {errorMsg && <p style={styles.error}>{errorMsg}</p>}
+
+        <form onSubmit={handleDonate} style={{ marginTop: "15px" }}>
           <input
             type="number"
-            placeholder="Amount (XLM)"
+            placeholder="Amount XLM"
             value={amount}
             min="0"
             step="0.1"
@@ -115,8 +152,8 @@ function App() {
 
           <button
             type="submit"
-            style={styles.primaryButton}
             disabled={loading}
+            style={styles.button}
           >
             {loading ? "Processing..." : "Send Donation"}
           </button>
@@ -140,98 +177,60 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     height: "100vh",
-    background:
-      "linear-gradient(135deg, #0f172a, #1e293b, #020617)",
-    fontFamily: "sans-serif",
-  },
-
-  cardGlass: {
-    width: "380px",
-    padding: "30px",
-    borderRadius: "20px",
-    backdropFilter: "blur(20px)",
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
-    color: "white",
-  },
-
-  title: {
-    marginBottom: "10px",
-  },
-
-  subtitle: {
-    color: "#94a3b8",
-    marginBottom: "25px",
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-
-  badge: {
-    background: "#22c55e",
-    padding: "5px 10px",
-    borderRadius: "20px",
-    fontSize: "11px",
-  },
-
-  walletBox: {
-    background: "rgba(255,255,255,0.05)",
-    padding: "15px",
-    borderRadius: "12px",
-    marginBottom: "20px",
-  },
-
-  label: {
-    fontSize: "11px",
-    color: "#94a3b8",
-    margin: 0,
-  },
-
-  address: {
-    fontSize: "13px",
-    display: "block",
-    marginBottom: "10px",
-  },
-
-  balance: {
-    margin: 0,
-  },
-
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-  },
-
-  input: {
-    padding: "12px",
-    borderRadius: "10px",
-    border: "none",
-    outline: "none",
     background: "#020617",
     color: "white",
   },
 
-  primaryButton: {
-    padding: "12px",
+  card: {
+    background: "#0f172a",
+    padding: "30px",
+    borderRadius: "15px",
+    width: "360px",
+    textAlign: "center",
+  },
+
+  box: {
+    background: "#020617",
+    padding: "15px",
     borderRadius: "10px",
+    marginTop: "15px",
+  },
+
+  label: {
+    fontSize: "12px",
+    color: "#94a3b8",
+  },
+
+  input: {
+    width: "100%",
+    padding: "10px",
+    borderRadius: "8px",
+    marginBottom: "10px",
     border: "none",
-    background: "linear-gradient(135deg,#3b82f6,#6366f1)",
+  },
+
+  button: {
+    width: "100%",
+    padding: "10px",
+    borderRadius: "8px",
+    background: "#3b82f6",
+    border: "none",
     color: "white",
-    fontWeight: "bold",
     cursor: "pointer",
   },
 
   disconnect: {
-    marginTop: "15px",
+    marginTop: "10px",
     background: "none",
     border: "none",
     color: "#94a3b8",
     cursor: "pointer",
+  },
+
+  error: {
+    color: "#ef4444",
     fontSize: "12px",
+    marginTop: "10px",
   },
 };
 
